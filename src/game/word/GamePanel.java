@@ -8,6 +8,8 @@ import java.awt.Choice;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.io.BufferedReader;
@@ -24,7 +26,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-public class GamePanel extends JPanel implements ItemListener{
+public class GamePanel extends JPanel implements ItemListener, Runnable, ActionListener{
 	GameWindow gameWindow;
 	GamePanel gamePanel;
 	
@@ -49,6 +51,17 @@ public class GamePanel extends JPanel implements ItemListener{
 	// 선택한 단어.txt 내용(단어) 저장(Generic type-String)
 	ArrayList<String> wordList=new ArrayList<String>();
 	
+	// 게임이 시작하면 단어를 움직일 쓰레드
+	Thread thread;
+	
+	// 게임을 멈출 수 있는 변수(run에서 사용)
+	boolean flag=true;
+	
+	// 단어의 현재 위치를 조절할 변수(y축값)
+	//int y=100;
+	
+	ArrayList<Word> wordArr=new ArrayList<Word>();
+	
 	public GamePanel(GameWindow gameWindow){
 		this.gameWindow=gameWindow;
 		setLayout(new BorderLayout());
@@ -58,8 +71,21 @@ public class GamePanel extends JPanel implements ItemListener{
 		// 추출한 단어를 이 영역에 출력
 		// 다시 그려야 하므로 내부 익명 클래스로 재정의
 		p_center=new JPanel(){
-			protected void paintComponent(Graphics g) {
-				g.drawString("야호", 100, 150);
+
+			public void paintComponent(Graphics g) {
+				// 하나의 단어 움직임에만 최적화됨 -> 클래스 필요(단어를 하나의 객체로 간주)
+				// 기존의 그림 지우기
+				g.setColor(Color.white);
+				g.fillRect(0, 0, 750, 700);
+				g.setColor(Color.pink);
+				
+				//g.drawString("야호", 100, y);
+				
+				// 모든 word 객체에 대해 render() 호출
+				for(int i=0; i<wordArr.size(); i++){
+					// render()는 Graphics g가 필요하므로 패널에서 호출
+					wordArr.get(i).render(g);
+				}
 			}
 		};
 		
@@ -72,10 +98,16 @@ public class GamePanel extends JPanel implements ItemListener{
 		
 		choice.add("플레이할 단어 선택");
 		choice.setPreferredSize(new Dimension(135, 40));
+		
+		// choice와 리스너 연결
 		choice.addItemListener(this);
 		
 		p_west.setPreferredSize(new Dimension(150, 700));
 		//p_west.setBackground(Color.cyan);
+		
+		// 버튼과 리스너 연결
+		bt_start.addActionListener(this);
+		bt_pause.addActionListener(this);
 		
 		p_west.add(la_user);
 		p_west.add(choice);
@@ -141,6 +173,9 @@ public class GamePanel extends JPanel implements ItemListener{
 					wordList.add(data);		// 읽어오는 단어 저장
 				}
 				
+				// 준비 완료 된 단어들을 화면에 출력
+				createWord();
+				
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -175,9 +210,81 @@ public class GamePanel extends JPanel implements ItemListener{
 		}
 	}
 	
+	// 단어 생성(Word 객체 생성)
+	public void createWord() {
+		for(int i=0; i<wordList.size(); i++){
+			//String name=wordList.get(i);
+			Word word=new Word(wordList.get(i),(i*(75)+10),100);
+			// 생성된 word객체들을 담아놔야 접근 가능
+			// word 객체 명단 만들기
+			wordArr.add(word);
+		}
+	}
+
+	// 게임 시작
+	public void startGame(){
+		// Runnable을 재정의한 현재 클래스를 대상으로 넣어주면 재정의한 run() 수행
+		// 쓰레드가 메모리에 올라오지 않은 경우(최초)에만 쓰레드 실행, thread=null
+		if(thread==null){
+			thread=new Thread(this);
+			thread.start();
+		}
+	}
+	
+	// 게임 중지
+	public void pauseGame(){
+		flag=false;
+	}
+/*	
+	// 단어 움직이기
+	public void down(){
+		/*
+		// y값을 증가시키고
+		y+=10;
+		
+		// p_center 패널이 그림을 다시 그리기
+		p_center.repaint();
+		//System.out.println("내려오고 있어!");
+		
+	}
+*/	
 	// item 선택 메소드(플레이할 단어.txt 파일 선택)
 	public void itemStateChanged(ItemEvent e) {
 		//System.out.println("바꿨닝");
 		getWord();
+	}
+	
+	// 쓰레드 run()
+	public void run() {
+		// flag가 true인 경우 계속 수행
+		while(flag){
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+			//down();	// Word 객체에서 내려오는 효과가 존재하므로 필요X
+			// 모든 단어에 대해서 tick() & render()
+			for(int i=0; i<wordArr.size(); i++){
+				wordArr.get(i).tick();
+				// render()는 Graphics g가 필요하므로 패널에서 호출
+				// wordArr.get(i).render(g);
+			}
+			
+			// 모든 단어들에 대해 repaint()
+			p_center.repaint();
+		}
+	}
+	
+	// 버튼에 따른 실행
+	public void actionPerformed(ActionEvent e) {
+		Object obj=e.getSource();
+		if(obj==bt_start){
+			startGame();
+		} else if(obj==bt_pause){
+			pauseGame();
+		}
 	}
 }
